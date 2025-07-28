@@ -1,9 +1,7 @@
 import os
 import requests
-#from dotenv import load_dotenv
 
-#load_dotenv()
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+BASE_URL = "https://basirah-project.onrender.com"
 
 def get_tafsir(author, surah, ayah, lang="ar"):
     url = f"{BASE_URL}/tafsir/{author}/{surah}/{ayah}"
