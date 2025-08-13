@@ -1,141 +1,223 @@
 import streamlit as st
 import json
-from api_client import get_tafsir, get_reflection, search_topic
+from api_client import (
+    login_user, logout_user,
+    get_tafsir, get_reflection, search_topic
+)
 
-# Load data
+# -----------------------
+# Load Surah and Quran data
+# -----------------------
 with open("surah.json", encoding="utf-8") as f:
     surah_data = json.load(f)
 
 with open("quran.json", encoding="utf-8") as f:
     quran_data = json.load(f)
 
-# Mappings
+# Author Mapping
 authors = {
     "alaloosi": "Al Alusi", "alrazi": "Al Razi", "ibn-aashoor": "Ibn Ashur",
     "ibn-katheer": "Ibn Kathir", "qurtubi": "Al Qurtubi", "tabari": "Al Tabari"
 }
 
+# Language Mapping
 languages = {
-    "ar": "العربية", "en": "English", "fr": "Français", "de": "Deutsch", "ur": "اردو"
+    "ar": "العربية", "en": "English", "fr": "Français", "de": "Deutsch", "es": "Spanish", "ur": "اردو"
 }
 
+# Surah and Ayah Mappings
 surahs = {s['surah_number']: s['surah_name'] for s in surah_data['surahs']}
 total_ayah_map = {s['surah_number']: s['total_ayat'] for s in surah_data['surahs']}
 
-# Utilities
+# -----------------------
+# Helpers
+# -----------------------
 def get_ayah_text(surah_num, ayah_num):
-    return f"{surah_num}:{ayah_num} {quran_data.get(str(surah_num), {}).get(str(ayah_num), {}).get('arabic', '(Ayah not found)')}"
+    surah = quran_data.get(f"{surah_num}")
+    ayah = surah.get(f"{ayah_num}")
+    return f"{surah_num}:{ayah_num} {ayah.get('arabic')}"
 
-# Page config
+# -----------------------
+# Page Config & Styling
+# -----------------------
 st.set_page_config(layout="wide", page_title="Basirah - Quranic Insights", page_icon="📖", initial_sidebar_state="collapsed")
 
-# Styling
 st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
-        .main-title { font-family: 'Inter', sans-serif; font-size: 2.2rem; margin-bottom: 0.2rem; }
-        .subtitle { font-size: 1.1rem; color: #555; margin-bottom: 1rem; }
-        .arabic-text { font-family: 'Amiri', serif; font-size: 1.4rem; direction: rtl; text-align: right; margin: 1rem 0; }
-        .english-text { font-size: 1rem; line-height: 1.6; margin: 1rem 0; }
-        footer {visibility: hidden;}
+        /* Arabic Text Styles */
+        .arabic-text {
+            font-family: 'Amiri', serif;
+            font-size: 22px;
+            direction: rtl;
+            text-align: right;
+            margin-bottom: 1rem;
+            line-height: 1.8;
+            color: #2c3e50;
+        }
+        
+        .arabic-subheading {
+            font-family: 'Amiri', serif;
+            font-size: 24px;
+            font-weight: 600;
+            direction: rtl;
+            text-align: right;
+            margin-bottom: 1rem;
+            color: #2d3748;
+        }
+            
+        /* Urdu Text Styles */
+        .urdu-text {
+            font-family: 'Noto Nastaliq Urdu', serif;
+            font-size: 20px;
+            direction: rtl;
+            text-align: right;
+            margin-bottom: 1rem;
+            line-height: 2;
+            color: #2c3e50;
+        }
+            
+        /* English Text Styles */
+        .english-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            direction: ltr;
+            text-align: left;
+            margin-bottom: 1rem;
+            line-height: 1.6;
+            color: #2c3e50;
+            font-weight: 400;
+        }            
     </style>
 """, unsafe_allow_html=True)
 
-# Header
-st.markdown("""<h1 class="main-title">📖 Basirah Project</h1>
-<p class="subtitle">Explore Quranic wisdom through classical Tafsir</p>""", unsafe_allow_html=True)
+# -----------------------
+# Login Screen
+# -----------------------
+def login_screen():
+    st.title("🔐 Login to Basirah - Quranic Insights")
+    with st.form("login_form", enter_to_submit=True):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.form_submit_button("Login"):
+            if login_user(username, password):
+                st.success("✅ Login successful!")
+                st.rerun()
+            else:
+                st.error("❌ Login failed. Please check your credentials.")
 
-# Navigation
-tabs = st.columns(3)
-if tabs[0].button("📘 Tafsir", use_container_width=True): st.session_state.active_tab = 'tafsir'
-if tabs[1].button("💡 Reflection", use_container_width=True): st.session_state.active_tab = 'reflection'
-if tabs[2].button("🔍 Topic Search", use_container_width=True): st.session_state.active_tab = 'search'
+# -----------------------
+# Main Application
+# -----------------------
+def main_app():
+    st.sidebar.header("🧭 Navigation")
+    if st.sidebar.button("Logout"):
+        logout_user()
+        st.rerun()
 
-st.divider()
+    option = st.sidebar.radio("Choose Feature", ["📘 View Tafsir", "💡 Reflection", "🔍 Topic Search"])
 
-# Tafsir Tab
-if st.session_state.get('active_tab', 'tafsir') == 'tafsir':
-    with st.form("tafsir_form"):
-        st.subheader("📘 View Tafsir")
-        col1, col2 = st.columns(2)
-        with col1:
-            author = st.selectbox("Author", list(authors), format_func=lambda x: authors[x])
-            surah = st.selectbox("Surah", list(surahs), format_func=lambda x: f"{x}. {surahs[x]}")
-        with col2:
-            lang = st.selectbox("Language", list(languages), format_func=lambda x: languages[x])
-            max_ayah = total_ayah_map.get(surah, 286)
-            ayah = st.selectbox("Ayah", range(1, max_ayah + 1))
-        submitted = st.form_submit_button("✨ Get Tafsir")
+    if option == "📘 View Tafsir":
+        st.subheader("View Tafsir by Author, Surah, and Ayah")
+    
+        surah_number = st.selectbox("Surah", list(surahs.keys()), format_func=lambda x: f"{x}. {surahs[x]}")
+        with st.form("tafsir_form", border=False):
+            max_ayah = total_ayah_map.get(surah_number, 286)
+            ayah = st.selectbox("Ayah", list(range(1, max_ayah + 1)))
+            author_key = st.selectbox("Select Author", list(authors.keys()), format_func=lambda x: authors[x])
+            lang = st.selectbox("Language", list(languages.keys()), format_func=lambda x: languages[x])
+            submitted = st.form_submit_button("Get Tafsir")
 
-    if submitted:
-        with st.spinner("🔍 Fetching tafsir..."):
-            result = get_tafsir(author, surah, ayah, lang)
-        if "error" in result:
-            st.error(f"❌ {result['error']}")
-        else:
-            st.markdown(f"<div class='arabic-text'>{get_ayah_text(surah, ayah)}</div>", unsafe_allow_html=True)
-            st.subheader("📖 Tafsir")
-            st.markdown(f"<div class='{'arabic-text' if lang == 'ar' else 'english-text'}'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
+        if submitted:
+            with st.spinner("Fetching tafsir..."):
+                result = get_tafsir(author_key, surah_number, ayah, lang)
+            if "error" in result:
+                st.error(result["error"])
+            else:
+                ayah_text = get_ayah_text(surah_number, ayah)
+                st.markdown(f"<div class='arabic-subheading'>{ayah_text}</div>", unsafe_allow_html=True)
+                if lang == "ar":
+                    st.markdown(f"<div class='arabic-text'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
+                if lang == "ur":
+                    st.markdown(f"<div class='urdu-text'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='english-text'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
+                    #st.markdown(result["tafsir_text"])
 
-# Reflection Tab
-elif st.session_state.active_tab == 'reflection':
-    with st.form("reflection_form"):
-        st.subheader("💡 Generate Reflection")
-        col1, col2 = st.columns(2)
-        with col1:
-            author = st.selectbox("Author", list(authors), format_func=lambda x: authors[x])
-            surah = st.selectbox("Surah", list(surahs), format_func=lambda x: f"{x}. {surahs[x]}")
-        with col2:
-            lang = st.selectbox("Language", list(languages), format_func=lambda x: languages[x])
-            max_ayah = total_ayah_map.get(surah, 286)
-        col3, col4 = st.columns(2)
-        with col3:
-            from_ayah = st.selectbox("From Ayah", range(1, max_ayah + 1))
-        with col4:
-            to_ayah = st.selectbox("To Ayah", range(from_ayah, max_ayah + 1))
-        submitted = st.form_submit_button("✨ Generate Reflection")
+    elif option == "💡 Reflection":
+        st.subheader("Generate a Reflection")
 
-    if submitted:
-        with st.spinner("🤔 Generating reflection..."):
-            result = get_reflection(author, surah, from_ayah, to_ayah, lang)
-        if "error" in result:
-            st.error(f"❌ {result['error']}")
-        else:
-            st.subheader("📜 Selected Verses")
-            for a in range(from_ayah, to_ayah + 1):
-                st.markdown(f"<div class='arabic-text'>{get_ayah_text(surah, a)}</div>", unsafe_allow_html=True)
-            st.subheader(f"✨ Reflection for Surah {surah}: Ayah {from_ayah}-{to_ayah}")
-            st.markdown(f"<div class='english-text'>{result['reflection']}</div>", unsafe_allow_html=True)
+        surah_number = st.selectbox("Surah", list(surahs.keys()), format_func=lambda x: f"{x}. {surahs[x]}")
+        with st.form("reflection_form", border=False):
 
-# Search Tab
-elif st.session_state.active_tab == 'search':
-    with st.form("search_form"):
-        st.subheader("🔍 Search by Topic")
-        query = st.text_input("Topic or keyword", placeholder="e.g., prayer, patience")
-        with st.expander("🔧 Filters"):
-            col1, col2, col3 = st.columns(3)
+            max_ayah = total_ayah_map.get(surah_number, 286)
+            col1, col2 = st.columns(2)
             with col1:
-                author = st.selectbox("Author", [""] + list(authors), format_func=lambda x: authors.get(x, "All Authors"))
+                from_ayah = st.selectbox("From Ayah", list(range(1, max_ayah + 1)))
             with col2:
-                surah = st.selectbox("Surah", [0] + list(surahs), format_func=lambda x: f"{x}. {surahs.get(x, '')}" if x else "All Surahs")
-            with col3:
-                lang = st.selectbox("Language", list(languages), format_func=lambda x: languages[x])
-            top_k = st.slider("Number of Results", 1, 20, 5)
-        submitted = st.form_submit_button("🔍 Search")
+                to_ayah = st.selectbox("To Ayah", list(range(from_ayah, max_ayah + 1)))
+            
+            author_key = st.selectbox("Select Author", list(authors.keys()), format_func=lambda x: authors[x])
+            lang = st.selectbox("Language", list(languages.keys()), format_func=lambda x: languages[x])
+            submitted = st.form_submit_button("Generate Reflection")
 
-    if submitted and query:
-        with st.spinner("🔍 Searching..."):
-            result = search_topic(query, author or None, surah or None, lang, top_k)
-        if "error" in result:
-            st.error(f"❌ {result['error']}")
-        else:
-            st.subheader(f"📊 Results ({len(result['results'])})")
-            for i, r in enumerate(result['results'], 1):
-                ayah_text = get_ayah_text(r['surah'], int(r['ayah_range'][0]))
-                with st.expander(f"#{i} • Surah {r['surah']} - Ayah {r['ayah_range'][0]} • Score: {round(r['score'], 3)}"):
-                    st.markdown(f"<div class='arabic-text'>{ayah_text}</div>", unsafe_allow_html=True)
-                    st.markdown(f"**📚 Author:** {r['author']}")
-                    if lang != "ar":
-                        st.markdown(f"<div class='english-text'>{r['translated_text']}</div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<div class='arabic-text'>{r['text']}</div>", unsafe_allow_html=True)
+        if submitted:
+            with st.spinner("Generating reflection..."):
+                result = get_reflection(author_key, surah_number, from_ayah, to_ayah, lang)
+            if "error" in result:
+                st.error(result["error"])
+            else:
+                for ayah in range(from_ayah, to_ayah + 1):
+                    ayah_text = get_ayah_text(surah_number, ayah)
+                    st.markdown(f"<div class='arabic-subheading'>{ayah_text}</div>", unsafe_allow_html=True)
+                st.markdown(f"### ✨ Reflection for Surah {surah_number}: Ayah {from_ayah} - {to_ayah}")
+                if lang == "ar":
+                    st.markdown(f"<div class='arabic-text'>{result['reflection']}</div>", unsafe_allow_html=True)
+                if lang == "ur":
+                    st.markdown(f"<div class='urdu-text'>{result['reflection']}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='english-text'>{result['reflection']}</div>", unsafe_allow_html=True)
+                    #st.markdown(result["reflection"])
+
+    elif option == "🔍 Topic Search":
+        st.subheader("Search Tafsir by Topic")
+        with st.form("topic_form", border=False):
+            query = st.text_input("Enter topic or phrase")
+            author_key = st.selectbox("Filter by Author (optional)", ["", *authors.keys()], format_func=lambda x: authors[x] if x else "All Authors")
+            surah_number = st.selectbox("Filter by Surah (optional)", [0] + list(surahs.keys()), format_func=lambda x: f"{x}. {surahs.get(x, '')}" if x else "All Surahs")
+            lang = st.selectbox("Language", list(languages.keys()), format_func=lambda x: languages[x])
+            top_k = st.slider("Number of Results", 1, 10, 3)
+            submitted = st.form_submit_button("Search")
+
+        if submitted and query:
+            with st.spinner("Searching topic..."):
+                selected_author = author_key if author_key else None
+                selected_surah = surah_number if surah_number > 0 else None
+                result = search_topic(query, selected_author, selected_surah, lang, top_k)
+            if "error" in result:
+                st.error(result["error"])
+            else:
+                for r in result["results"]:
+                    ayah_text = get_ayah_text(r["surah"], int(r["ayah_range"][0]))
+                    surah_name = surahs.get(int(r["surah"]))
+                    with st.expander(f"Surah {r['surah']} ({surah_name}) - Ayah {r['ayah_range'][0]} | Score: {round(r['score'], 3)}"):
+                        st.markdown(f"<div class='arabic-subheading'>{ayah_text}</div>", unsafe_allow_html=True)
+                        st.markdown(f"**Author:** {r['author']}")
+                        if lang == "ar":
+                            st.markdown(f"<div class='arabic-text'>{r['text']}</div>", unsafe_allow_html=True)
+                        elif lang == "ur":
+                            st.markdown(f"<div class='urdu-text'>{r['translated_text']}</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div class='english-text'>{r['translated_text']}</div>", unsafe_allow_html=True)
+                            #st.markdown(f"{r['translated_text']}")
+
+# -----------------------
+# Run
+# -----------------------
+if "token" not in st.session_state:
+    login_screen()
+else:
+    main_app()
