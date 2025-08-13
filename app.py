@@ -141,7 +141,7 @@ def main_app():
                 st.markdown(f"<div class='arabic-subheading'>{ayah_text}</div>", unsafe_allow_html=True)
                 if lang == "ar":
                     st.markdown(f"<div class='arabic-text'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
-                if lang == "ur":
+                elif lang == "ur":
                     st.markdown(f"<div class='urdu-text'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"<div class='english-text'>{result['tafsir_text']}</div>", unsafe_allow_html=True)
@@ -176,7 +176,7 @@ def main_app():
                 st.markdown(f"### ✨ Reflection for Surah {surah_number}: Ayah {from_ayah} - {to_ayah}")
                 if lang == "ar":
                     st.markdown(f"<div class='arabic-text'>{result['reflection']}</div>", unsafe_allow_html=True)
-                if lang == "ur":
+                elif lang == "ur":
                     st.markdown(f"<div class='urdu-text'>{result['reflection']}</div>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"<div class='english-text'>{result['reflection']}</div>", unsafe_allow_html=True)
